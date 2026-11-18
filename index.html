@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>동화마을 학급 도서관 · 도서 예약</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #faf5eb;               /* 따뜻한 동화책 종이색 */
+    --bg-pattern: #f3ead8;
+    --card: #fffdf9;
+    --wood: #7c5338;             /* 원목 책장 브라운 */
+    --wood-dark: #5a3a25;
+    --wood-soft: #f5ebe0;
+    --ink: #3b2a1e;
+    --muted: #7d6b5d;
+    --line: #e6d8c3;
+    --accent: #3d7a5c;           /* 숲속 초록 */
+    --accent-soft: #e6f2eb;
+    --accent-ink: #27543e;
+    --gold: #d99b26;
+    --warn: #c24b38;
+    --warn-soft: #fdece9;
+    --today: #fff5d6;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background-color: var(--bg);
+    background-image: radial-gradient(var(--line) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* 동화마을 지붕 느낌 헤더 */
+  header {
+    background: linear-gradient(135deg, #6d4730 0%, #8c5c3e 100%);
+    color: #fffaf0;
+    padding: 24px 16px 20px;
+    border-bottom: 4px solid #d99b26;
+    box-shadow: 0 4px 14px rgba(90, 58, 37, 0.15);
+  }
+  header .inner, main { max-width: 1080px; margin: 0 auto; }
+  header h1 {
+    margin: 0;
+    font-family: 'Gowun Batang', Pretendard, serif;
+    font-size: 1.6rem;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header p { margin: 6px 0 0; opacity: .9; font-size: .95rem; color: #f7ead7; }
+
+  /* 책갈피 모양 탭 */
+  nav.tabs {
+    background: #5a3a25;
+    padding-top: 6px;
+  }
+  nav.tabs .inner { max-width: 1080px; margin: 0 auto; padding: 0 16px; display: flex; gap: 6px; }
+  nav.tabs button {
+    border: none;
+    border-radius: 12px 12px 0 0;
+    background: rgba(255, 250, 240, 0.14);
+    color: #f7ead7;
+    font-weight: 700;
+    padding: 10px 22px;
+    transition: all 0.15s;
+  }
+  nav.tabs button:hover { background: rgba(255, 250, 240, 0.25); }
+  nav.tabs button.active {
+    background: var(--bg);
+    color: var(--wood-dark);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+  }
+
+  main { padding: 20px 16px 40px; display: grid; gap: 20px; }
+
+  .card {
+    background: var(--card);
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: 0 6px 18px rgba(124, 83, 56, 0.06);
+  }
+  .card h2 {
+    margin: 0 0 16px;
+    font-family: 'Gowun Batang', Pretendard, serif;
+    font-size: 1.25rem;
+    color: var(--wood-dark);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card h2 .num {
+    display: inline-grid; place-items: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--gold); color: #fff; font-family: Pretendard, sans-serif;
+    font-size: .9rem; font-weight: 800;
+    box-shadow: 0 2px 5px rgba(217, 155, 38, 0.35);
+  }
+
+  /* 도서 선택 비주얼 카드 그리드 (책장 UI) */
+  .bookshelf-label {
+    font-size: .9rem; font-weight: 700; color: var(--wood-dark); margin-bottom: 10px; display: block;
+  }
+  .book-picker {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .book-card {
+    position: relative;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 10px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  .book-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--gold);
+    box-shadow: 0 6px 14px rgba(124, 83, 56, 0.12);
+  }
+  .book-card.selected {
+    background: #fff9eb;
+    border-color: var(--wood);
+    box-shadow: 0 0 0 3px rgba(217, 155, 38, 0.28);
+  }
+  .book-card.selected::after {
+    content: "✓ 선택됨";
+    position: absolute;
+    top: -10px;
+    right: 8px;
+    background: var(--wood);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .book-cover {
+    width: 62px;
+    height: 76px;
+    border-radius: 6px 12px 12px 6px;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    box-shadow: inset 5px 0 0 rgba(0,0,0,0.12), 2px 4px 8px rgba(0,0,0,0.12);
+  }
+  .book-title {
+    font-weight: 800;
+    font-size: 0.96rem;
+    color: var(--ink);
+    line-height: 1.25;
+  }
+  .book-tag {
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: var(--wood-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  /* 주간 시간표 상단 책 선택 바 */
+  .book-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .book-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .book-tab-btn:hover {
+    border-color: var(--wood);
+    background: var(--wood-soft);
+  }
+  .book-tab-btn.active {
+    background: var(--wood);
+    border-color: var(--wood);
+    color: #fff;
+  }
+
+  .grid-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid-form .full { grid-column: 1 / -1; }
+  label { display: block; font-size: .88rem; color: var(--muted); margin-bottom: 5px; font-weight: 700; }
+  label .req { color: var(--warn); }
+  input, select {
+    width: 100%; padding: 10px 12px; font: inherit;
+    border: 1.5px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+  }
+  input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: var(--wood); }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 10px; border: 1.5px solid var(--line);
+    background: #fff; color: var(--ink); padding: 10px 14px; font-weight: 600;
+  }
+  button:hover { background: var(--wood-soft); }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700;
+    padding: 12px 22px; font-size: 1rem;
+    box-shadow: 0 4px 10px rgba(61, 122, 92, 0.25);
+  }
+  button.primary:hover { background: var(--accent-ink); }
+  button:disabled { opacity: .55; cursor: wait; }
+  button.danger { color: var(--warn); border-color: #f0c9bf; padding: 6px 12px; font-size: .88rem; background: #fff; }
+  button.danger:hover { background: var(--warn-soft); }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  /* 주간 시간표 */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .toolbar .week-label { font-weight: 800; margin: 0 8px; color: var(--wood-dark); }
+  .toolbar .spacer { flex: 1; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
+  .tt-loading {
+    display: none; position: absolute; inset: 0; z-index: 2; align-items: center; justify-content: center;
+    background: rgba(255, 253, 249, .8); color: var(--wood-dark); font-weight: 700;
+  }
+  .table-wrap.loading .tt-loading { display: flex; }
+  table.tt { width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 5px; table-layout: fixed; }
+  table.tt th { font-size: .92rem; color: var(--wood-dark); font-weight: 700; padding: 8px 4px; background: var(--wood-soft); border-radius: 8px; }
+  table.tt th.today { background: var(--gold); color: #fff; }
+  table.tt th .date { display: block; font-size: .78rem; font-weight: 500; opacity: 0.9; }
+  table.tt td.period { width: 62px; text-align: center; font-weight: 800; color: var(--wood-dark); background: var(--wood-soft); border-radius: 8px; }
+  table.tt td.slot {
+    height: 66px; border-radius: 12px; text-align: center; vertical-align: middle;
+    font-size: .9rem; padding: 4px; cursor: pointer;
+    border: 1.5px dashed #d8c7b0; color: #a89580; background: #fff;
+    transition: all 0.12s;
+  }
+  table.tt td.slot:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+  table.tt td.slot.today { background: var(--today); }
+  table.tt td.slot.booked {
+    border: 1.5px solid #b8d8c7; background: var(--accent-soft); color: var(--accent-ink); cursor: default;
+  }
+  table.tt td.slot.booked strong { display: block; font-size: .95rem; }
+  table.tt td.slot.booked span { font-size: .8rem; color: var(--muted); }
+  table.tt td.slot.past:not(.booked) { cursor: default; background: #f4efe6; border-style: solid; border-color: transparent; color: transparent; }
+  table.tt td.slot.past:not(.booked):hover { border-color: transparent; }
+  table.tt td.slot.closed, table.tt td.slot.closed:hover {
+    cursor: default; background: #efe9de; border: 1.5px solid transparent; color: #b0a08e; font-size: .8rem;
+  }
+  table.tt td.slot.closed.blocked, table.tt td.slot.closed.blocked:hover {
+    background: #fff2cc; color: #8a6012; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hint { font-size: .85rem; color: var(--muted); margin: 10px 0 0; }
+
+  /* 검색·목록 */
+  .search { display: grid; grid-template-columns: 2fr 1.5fr 1.5fr auto; gap: 10px; align-items: end; margin-bottom: 12px; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); margin-bottom: 12px; cursor: pointer; }
+  .check input { width: auto; }
+  .list { display: grid; gap: 8px; }
+  .item {
+    display: grid; grid-template-columns: 150px 185px 1fr auto; gap: 12px; align-items: center;
+    padding: 12px 16px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff;
+  }
+  .item .when { font-weight: 700; color: var(--wood-dark); }
+  .item .book { color: var(--accent-ink); font-weight: 700; }
+  .item .who { color: var(--ink); }
+  .item.past { opacity: .6; }
+  .empty { color: var(--muted); text-align: center; padding: 24px; background: var(--wood-soft); border-radius: 12px; }
+
+  /* 알림 */
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--wood-dark); color: #fff; padding: 12px 20px; border-radius: 12px;
+    font-weight: 600; max-width: calc(100% - 32px); opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 20;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: var(--warn); }
+  #toast.ok { background: var(--accent); }
+  .setup {
+    background: var(--warn-soft); border: 1.5px solid #f0c9bf; color: var(--warn);
+    border-radius: var(--radius); padding: 16px; font-weight: 600;
+  }
+
+  .tab-panel { display: grid; gap: 18px; }
+  main > *, .tab-panel > *, .stats-grid > * { min-width: 0; }
+  .tab-panel[hidden] { display: none; }
+
+  /* 통계 */
+  .seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .seg button { border: none; border-radius: 0; padding: 8px 16px; }
+  .seg button.active { background: var(--wood); color: #fff; font-weight: 700; }
+  .stats-summary { color: var(--muted); font-size: .92rem; }
+  .stats-summary strong { color: var(--wood-dark); }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stats-grid .full { grid-column: 1 / -1; }
+  .chart-box { position: relative; height: 300px; }
+  .card h3 { margin: 0 0 4px; font-size: 1.08rem; color: var(--wood-dark); }
+  .card .sub { margin: 0 0 12px; font-size: .85rem; color: var(--muted); }
+
+  @media (max-width: 820px) {
+    .book-picker { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 760px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    nav.tabs button { flex: 1; }
+    .grid-form { grid-template-columns: 1fr 1fr; }
+    .search { grid-template-columns: 1fr 1fr; }
+    .search .grow { grid-column: 1 / -1; }
+    .item { grid-template-columns: 1fr auto; }
+    .item .when { grid-column: 1 / 2; }
+    .item .book { grid-column: 1 / 2; }
+    .item .who { grid-column: 1 / 2; }
+    .item button { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  }
+  @media (max-width: 520px) {
+    .book-picker { grid-template-columns: repeat(2, 1fr); }
+    .grid-form { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>🏡 동화마을 학급 도서관</h1>
+    <p>우리 반 온작품 읽기 도서 세트를 원하는 날짜와 교시에 예약해 보세요.</p>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="inner">
+    <button type="button" class="active" data-tab="booking">📖 도서 예약하기</button>
+    <button type="button" data-tab="stats">📊 독서 통계</button>
+  </div>
+</nav>
+
+<main>
+  <div id="setup" class="setup" hidden>
+    index.html의 SUPABASE_URL, SUPABASE_KEY 값을 내 프로젝트 값으로 바꿔 주세요.
+  </div>
+
+  <!-- ===================== 통계 탭 ===================== -->
+  <div class="tab-panel" id="tab-stats" hidden>
+    <section class="card">
+      <div class="toolbar" style="margin-bottom:0">
+        <div class="seg" role="group" aria-label="기간 선택">
+          <button type="button" class="active" data-range="week">이번 주</button>
+          <button type="button" data-range="month">이번 달</button>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" id="st-refresh">새로고침</button>
+      </div>
+      <p class="stats-summary" id="st-summary" style="margin:12px 0 0"></p>
+    </section>
+
+    <div class="stats-grid">
+      <section class="card full">
+        <h3>도서별 이용률</h3>
+        <p class="sub">예약 건수 ÷ (기간 내 예약 가능 교시 수) × 100</p>
+        <div class="chart-box"><canvas id="ch-books"></canvas></div>
+      </section>
+      <section class="card">
+        <h3>요일·교시별 독서 시간 혼잡도</h3>
+        <p class="sub">원이 클수록 예약이 많은 시간입니다</p>
+        <div class="chart-box"><canvas id="ch-busy"></canvas></div>
+      </section>
+      <section class="card">
+        <h3>학년별 이용 횟수</h3>
+        <p class="sub">기간 내 학년별 도서 예약 건수</p>
+        <div class="chart-box"><canvas id="ch-grade"></canvas></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===================== 예약 탭 ===================== -->
+  <div class="tab-panel" id="tab-booking">
+
+  <!-- 1. 예약 등록 -->
+  <section class="card" id="form-card">
+    <h2><span class="num">1</span>동화책 선택 및 예약 등록</h2>
+    <form id="form" autocomplete="off">
+      <span class="bookshelf-label">읽고 싶은 책을 책장에서 골라 주세요 <span style="color:var(--warn)">*</span></span>
+      <input type="hidden" id="f-book" required>
+      <div class="book-picker" id="book-picker"></div>
+
+      <div class="grid-form">
+        <div>
+          <label for="f-date">날짜 <span class="req">*</span></label>
+          <input type="date" id="f-date" required>
+        </div>
+        <div>
+          <label for="f-period">교시 <span class="req">*</span></label>
+          <select id="f-period" required></select>
+        </div>
+        <div>
+          <label for="f-teacher">교사 이름 <span class="req">*</span></label>
+          <input type="text" id="f-teacher" maxlength="20" placeholder="예: 김민지" required>
+        </div>
+        <div>
+          <label for="f-grade">학년 <span class="req">*</span></label>
+          <select id="f-grade" required>
+            <option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option>
+            <option value="4">4학년</option><option value="5">5학년</option><option value="6">6학년</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-class">반</label>
+          <input type="number" id="f-class" min="1" max="15" placeholder="예: 2">
+        </div>
+        <div>
+          <label for="f-pin">취소용 PIN (숫자 4자리) <span class="req">*</span></label>
+          <input type="password" id="f-pin" inputmode="numeric" maxlength="4" pattern="[0-9]{4}"
+            placeholder="숫자 4자리" autocomplete="off" required>
+        </div>
+        <div class="full actions">
+          <button type="submit" class="primary" id="f-submit">📚 선택한 도서 예약하기</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- 2. 주간 시간표 -->
+  <section class="card">
+    <h2><span class="num">2</span>도서별 주간 대출 시간표</h2>
+    <input type="hidden" id="w-book">
+    <div class="book-tabs" id="w-book-tabs"></div>
+
+    <div class="toolbar">
+      <span class="week-label" id="w-label"></span>
+      <span class="spacer"></span>
+      <button type="button" id="w-prev">◀ 이전 주</button>
+      <button type="button" id="w-today">이번 주</button>
+      <button type="button" id="w-next">다음 주 ▶</button>
+    </div>
+    <div class="table-wrap" id="tt-wrap">
+      <div class="tt-loading">불러오는 중…</div>
+      <table class="tt">
+        <thead id="w-head"></thead>
+        <tbody id="w-body"></tbody>
+      </table>
+    </div>
+    <p class="hint">💡 빈칸('+ 예약')을 누르면 해당 책과 날짜·교시가 위 예약 칸에 자동으로 채워집니다.</p>
+  </section>
+
+  <!-- 3. 검색 · 4. 취소 -->
+  <section class="card">
+    <h2><span class="num">3</span>예약 검색 · PIN 취소</h2>
+    <div class="search">
+      <div class="grow">
+        <label for="s-teacher">교사 이름</label>
+        <input type="text" id="s-teacher" placeholder="이름 일부만 입력해도 됩니다">
+      </div>
+      <div>
+        <label for="s-book">책 제목</label>
+        <select id="s-book"></select>
+      </div>
+      <div>
+        <label for="s-date">날짜</label>
+        <input type="date" id="s-date">
+      </div>
+      <div>
+        <button type="button" id="s-reset">초기화</button>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="s-past"> 지난 예약도 보기</label>
+    <div class="list" id="list"></div>
+  </section>
+  </div><!-- /예약 탭 -->
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// =====================================================================
+// ① 여기에 내 Supabase 값을 붙여 넣으세요 (publishable key만!)
+// =====================================================================
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_YOUR-KEY';
+let db = null;
+
+// 책별 동화 일러스트 아이콘 & 표지 테마 색상 매핑
+const BOOK_THEMES = {
+  '흥부놀부':       { icon: '🎃', bg: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', tag: '전래동화' },
+  '콩쥐팥쥐':       { icon: '🥿', bg: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', tag: '전래동화' },
+  '신데렐라':       { icon: '👠', bg: 'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)', tag: '세계명작' },
+  '5번레인':        { icon: '🏊', bg: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', tag: '창작동화' },
+  '마당을 나온 암탉': { icon: '🐔', bg: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', tag: '창작동화' },
+};
+const DEFAULT_THEME = { icon: '📘', bg: 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)', tag: '학급문고' };
+
+function getBookTheme(title) {
+  return BOOK_THEMES[title] || DEFAULT_THEME;
+}
+
+// DB 조회 실패/빈 테이블 대비 기본 5권 목록
+const FALLBACK_BOOKS = [
+  { id: 1, title: '흥부놀부', note: '전래동화 세트' },
+  { id: 2, title: '콩쥐팥쥐', note: '전래동화 세트' },
+  { id: 3, title: '신데렐라', note: '세계명작 세트' },
+  { id: 4, title: '5번레인', note: '창작동화 세트' },
+  { id: 5, title: '마당을 나온 암탉', note: '창작동화 세트' },
+];
+
+// =====================================================================
+// 서버 함수
+// =====================================================================
+function nextDay(s) { return fmt(addDays(parse(s), 1)); }
+const laterOf = (a, b) => (!a ? b : !b ? a : (a > b ? a : b));
+const earlierOf = (a, b) => (!a ? b : !b ? a : (a < b ? a : b));
+
+async function fetchAll(build) {
+  let all = [];
+  for (let start = 0; ; start += 1000) {
+    const { data, error } = await build().range(start, start + 999);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < 1000) return all;
+  }
+}
+
+const server = {
+  async getBooks() {
+    const { data, error } = await db.from('books').select('id, title, note').order('id');
+    if (error) throw error;
+    return data;
+  },
+
+  async getSettings() {
+    const [wp, tm, bl] = await Promise.all([
+      db.from('weekday_periods').select('weekday, last_period'),
+      db.from('terms').select('name, end_date').order('end_date'),
+      db.from('blocked_slots').select('*').order('id'),
+    ]);
+    for (const r of [wp, tm, bl]) if (r.error) throw r.error;
+    const byDay = { 1: 6, 2: 6, 3: 6, 4: 6, 5: 6 };
+    wp.data.forEach((r) => { byDay[r.weekday] = r.last_period; });
+    const terms = tm.data.map((t, i, arr) => ({ name: t.name, end: t.end_date, start: i ? nextDay(arr[i - 1].end_date) : null }));
+    const blocked = bl.data.map((b) => {
+      let from = b.date_from, to = b.date_to;
+      if (!to && b.weekday == null && !b.term_name) to = b.date_from;
+      const t = b.term_name ? terms.find((x) => x.name === b.term_name) : null;
+      if (t) { from = laterOf(from, t.start); to = earlierOf(to, t.end); }
+      const pf = b.period_from ?? 1, pt = b.period_to ?? b.period_from ?? 10;
+      return {
+        from: from || null, to: to || null, weekday: b.weekday ?? null,
+        periods: Array.from({ length: Math.max(0, pt - pf + 1) }, (_, i) => pf + i),
+        bookId: b.book_id ?? null, reason: b.reason,
+      };
+    });
+    return { byDay, maxPeriod: Math.max(1, ...Object.values(byDay)), blocked };
+  },
+
+  async listReservations(f = {}) {
+    const build = () => {
+      let q = db.from('reservations')
+        .select('id, book_id, reserved_date, period, teacher_name, grade, class_no')
+        .order('reserved_date').order('period');
+      if (f.bookId) q = q.eq('book_id', Number(f.bookId));
+      if (f.from) q = q.gte('reserved_date', f.from);
+      if (f.to) q = q.lte('reserved_date', f.to);
+      if (f.date) q = q.eq('reserved_date', f.date);
+      if (f.teacher) q = q.ilike('teacher_name', `%${f.teacher}%`);
+      if (f.upcomingOnly) q = q.gte('reserved_date', todayStr());
+      return q;
+    };
+    let rows;
+    if (f.from || f.to) rows = await fetchAll(build);
+    else {
+      const { data, error } = await build().limit(500);
+      if (error) throw error;
+      rows = data;
+    }
+    return rows.map((r) => ({ ...r, canCancel: true }));
+  },
+
+  async createReservation(row) {
+    const { error } = await db.rpc('create_reservation', {
+      p_book_id: row.book_id, p_date: row.reserved_date, p_period: row.period,
+      p_teacher: row.teacher_name, p_grade: row.grade, p_class: row.class_no, p_pin: row.pin,
+    });
+    if (!error) return { ok: true };
+    return { error: { code: error.code === '23505' ? 'DUPLICATE' : 'INVALID', message: error.message } };
+  },
+
+  async cancelReservation(id, pin) {
+    const { data, error } = await db.rpc('cancel_reservation', { p_id: Number(id), p_pin: pin });
+    if (error) throw error;
+    return data.ok ? { ok: true } : { error: { message: data.message } };
+  },
+};
+
+function api(fn, ...args) { return server[fn](...args); }
+
+// =====================================================================
+// 기본 설정
+// =====================================================================
+let PERIODS = [1, 2, 3, 4, 5, 6];
+let PERIODS_BY_DAY = { 1: 6, 2: 6, 3: 6, 4: 6, 5: 6 };
+let BLOCKED = [];
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+let books = [];
+let weekStart = mondayOf(new Date());
+
+const $ = (id) => document.getElementById(id);
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function fmt(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; } function parse(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); } function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; } function mondayOf(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) \% 7)); return x; } function todayStr() { return fmt(new Date()); } function niceDate(s) { const d = parse(s); return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_NAMES[d.getDay()]})`; }
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c]));
+}
+let toastTimer;
+function toast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ''), 3400);
+}
+function errMsg(e) {
+  if (e.code === 'DUPLICATE') return '이미 다른 학급에서 예약한 시간입니다. 다른 교시나 날짜를 골라 주세요.';
+  return e.message || ('오류가 발생했습니다: ' + e);
+}
+function maxFor(dateStr) { return dateStr ? (PERIODS_BY_DAY[parse(dateStr).getDay()] || 0) : 0; }
+
+function blockMatches(x, dateStr, period, bookId) {
+  if (!x.periods.includes(Number(period))) return false;
+  if (x.bookId !== null && x.bookId !== Number(bookId)) return false;
+  if (x.from && dateStr < x.from) return false;
+  if (x.to && dateStr > x.to) return false;
+  if (x.weekday !== null && parse(dateStr).getDay() !== x.weekday) return false;
+  return true;
+}
+function blockedReason(dateStr, period, bookId) {
+  const b = BLOCKED.find((x) => blockMatches(x, dateStr, period, bookId));
+  return b ? b.reason : '';
+}
+
+function fillPeriodOptions(keep) {
+  const date = $('f-date').value, bookId = $('f-book').value;
+  const max = maxFor(date);
+  const want = Number(keep ?? $('f-period').value) || 1;
+  if (!max) { $('f-period').innerHTML = '<option value="">예약 불가 (주말/휴무)</option>'; return; }
+  const opts = Array.from({ length: max }, (_, i) => {
+    const p = i + 1, why = blockedReason(date, p, bookId);
+    return { p, why, html: `<option value="${p}"${why ? ' disabled' : ''}>${p}교시${why ? ` (불가: ${esc(why)})` : ''}</option>` }; }); $('f-period').innerHTML = opts.map((o) => o.html).join(''); const pick = opts.find((o) => o.p === Math.min(want, max) && !o.why) \vert{}\vert{} opts.find((o) => !o.why); if (pick) $('f-period').value = String(pick.p); }  function bookTitle(id) { return books.find((b) => b.id === Number(id))?.title ?? '?'; } function classLabel(r) { return r.class_no ? `${r.grade}학년 ${r.class_no}반` : `${r.grade}학년`; }
+
+// =====================================================================
+// 도서 목록 불러오기 및 책장 UI 렌더링
+// =====================================================================
+function selectFormBook(bookId) {
+  $('f-book').value = String(bookId);
+  document.querySelectorAll('#book-picker .book-card').forEach((el) => {
+    el.classList.toggle('selected', Number(el.dataset.id) === Number(bookId));
+  });
+  fillPeriodOptions();
+}
+
+function selectWeekBook(bookId) {
+  $('w-book').value = String(bookId);
+  document.querySelectorAll('#w-book-tabs .book-tab-btn').forEach((el) => {
+    el.classList.toggle('active', Number(el.dataset.id) === Number(bookId));
+  });
+  renderWeek();
+}
+
+async function loadBooks() {
+  try {
+    const data = await api('getBooks');
+    books = (data && data.length > 0) ? data : FALLBACK_BOOKS;
+  } catch (e) {
+    console.warn('DB 도서 조회 오류, 기본 목록 표시:', e);
+    books = FALLBACK_BOOKS;
+    toast('DB 연결을 확인해 주세요. (기본 도서 목록으로 표시됩니다)', 'error');
+  }
+
+  // 1. 상단 예약 폼용 책 표지 카드 렌더링
+  $('book-picker').innerHTML = books.map((b, idx) => {
+    const theme = getBookTheme(b.title);
+    return `
+      <div class="book-card ${idx === 0 ? 'selected' : ''}" data-id="${b.id}" role="button" tabindex="0">
+        <div class="book-cover" style="background: ${theme.bg};">${theme.icon}</div>
+        <div class="book-title">${idx + 1}.${esc(b.title)}</div>
+        <span class="book-tag">${esc(b.note || theme.tag)}</span>
+      </div>
+    `;
+  }).join('');
+
+  $('book-picker').addEventListener('click', (ev) => {
+    const card = ev.target.closest('.book-card');
+    if (card) selectFormBook(card.dataset.id);
+  });
+
+  // 2. 주간 시간표용 책갈피 탭 렌더링
+  $('w-book-tabs').innerHTML = books.map((b, idx) => {
+    const theme = getBookTheme(b.title);
+    return `
+      <button type="button" class="book-tab-btn ${idx === 0 ? 'active' : ''}" data-id="${b.id}">
+        <span>${theme.icon}</span>
+        <span>${esc(b.title)}</span>
+      </button>
+    `;
+  }).join('');
+
+  $('w-book-tabs').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.book-tab-btn');
+    if (btn) selectWeekBook(btn.dataset.id);
+  });
+
+  // 3. 검색 필터용 드롭다운
+  const opts = books.map((b, idx) => {
+    const theme = getBookTheme(b.title);
+    return `<option value="${b.id}">${theme.icon} ${idx + 1}.${esc(b.title)}</option>`;
+  }).join('');
+  $('s-book').innerHTML = '<option value="">📚 전체 도서</option>' + opts;
+
+  // 첫 번째 책 기본 선택
+  if (books.length > 0) {
+    $('f-book').value = String(books[0].id);
+    $('w-book').value = String(books[0].id);
+  }
+}
+
+// =====================================================================
+// 1. 예약 등록
+// =====================================================================
+async function submitReservation(ev) {
+  ev.preventDefault();
+  const bookId = $('f-book').value;
+  const date = $('f-date').value;
+  const teacher = $('f-teacher').value.trim();
+  const classNo = $('f-class').value;
+  const pin = $('f-pin').value.trim();
+
+  if (!bookId) return toast('책을 선택해 주세요.', 'error');
+  if (!date) return toast('날짜를 선택해 주세요.', 'error');
+  const dow = parse(date).getDay();
+  if (dow === 0 || dow === 6) return toast('주말에는 예약할 수 없습니다.', 'error');
+  if (date < todayStr()) return toast('지난 날짜는 예약할 수 없습니다.', 'error');
+  if (!maxFor(date)) return toast(`${DAY_NAMES[dow]}요일은 예약할 수 없습니다.`, 'error'); const why = blockedReason(date, $('f-period').value, bookId); if (!$('f-period').value \vert{}\vert{} why) return toast(`이 시간은 예약할 수 없습니다 (${why || '예약 불가'}).`, 'error');
+  if (!teacher) return toast('교사 이름을 입력해 주세요.', 'error');
+  if (classNo && (classNo < 1 || classNo > 15)) return toast('반은 1~15 사이로 입력해 주세요.', 'error');
+  if (!/^[0-9]{4}$/.test(pin)) return toast('취소용 PIN을 숫자 4자리로 입력해 주세요.', 'error');
+
+  const row = {
+    book_id: Number(bookId),
+    reserved_date: date,
+    period: Number($('f-period').value),
+    teacher_name: teacher,
+    grade: Number($('f-grade').value),
+    class_no: classNo ? Number(classNo) : null,
+    pin,
+  };
+
+  const btn = $('f-submit');
+  btn.disabled = true; btn.textContent = '저장 중…';
+  let error = null;
+  try { const res = await api('createReservation', row); error = res.error || null; }
+  catch (e) { error = e; }
+  btn.disabled = false; btn.textContent = '📚 선택한 도서 예약하기';
+
+  weekStart = mondayOf(parse(date));
+  selectWeekBook(row.book_id);
+
+  if (error) {
+    toast(errMsg(error), 'error');
+  } else {
+    const theme = getBookTheme(bookTitle(row.book_id));
+    toast(`${theme.icon}${niceDate(date)} ${row.period}교시 「${bookTitle(row.book_id)}」 예약 완료!`, 'ok');
+  }
+  invalidateCache();
+  await Promise.all([renderWeek(), loadList(), renderStats()]);
+}
+
+// =====================================================================
+// 2. 주간 시간표
+// =====================================================================
+const CACHE_TTL = 60 * 1000;
+let cache = { from: '', to: '', rows: [], at: 0 };
+let inflight = null;
+let renderToken = 0;
+
+function cacheCovers(from, to) { return cache.at > 0 && cache.from <= from && to <= cache.to; }
+function invalidateCache() { cache.at = 0; }
+
+function loadWindowAround(start) {
+  if (inflight) return inflight;
+  const from = fmt(addDays(start, -28)), to = fmt(addDays(start, 9 * 7 - 3));
+  inflight = api('listReservations', { from, to })
+    .then((rows) => { cache = { from, to, rows, at: Date.now() }; })
+    .catch((e) => { console.warn('시간표 데이터 로드 실패:', e); })
+    .finally(() => { inflight = null; });
+  return inflight;
+}
+
+function setLoading(on) { $('tt-wrap').classList.toggle('loading', on); }
+
+async function renderWeek() {
+  const token = ++renderToken;
+  const days = [0, 1, 2, 3, 4].map((i) => addDays(weekStart, i));
+  const friday = days[4];
+  const today = todayStr();
+
+  $('w-label').textContent =
+    `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${friday.getMonth() + 1}월 ${friday.getDate()}일`;
+  $('w-head').innerHTML = '<tr><th>교시</th>' + days.map((d) => {
+    const isToday = fmt(d) === today;
+    return `<th class="${isToday ? 'today' : ''}">${DAY_NAMES[d.getDay()]}<span class="date">${d.getMonth() + 1}/${d.getDate()}${isToday ? ' 오늘' : ''}</span></th>`;
+  }).join('') + '</tr>';
+
+  const from = fmt(weekStart), to = fmt(friday);
+  if (!cacheCovers(from, to)) {
+    setLoading(true);
+    try {
+      if (inflight) await inflight;
+      if (!cacheCovers(from, to)) await loadWindowAround(weekStart);
+    } finally { if (token === renderToken) setLoading(false); }
+  } else if (Date.now() - cache.at > CACHE_TTL && !inflight) {
+    loadWindowAround(weekStart).then(() => { if (token === renderToken) drawWeek(); });
+  }
+  if (token !== renderToken) return;
+  drawWeek();
+
+  const nearEnd = fmt(addDays(weekStart, 18)) > cache.to || fmt(addDays(weekStart, -14)) < cache.from;
+  if (cache.at && nearEnd && !inflight) loadWindowAround(weekStart);
+}
+
+function drawWeek() {
+  const bookId = Number($('w-book').value);
+  if (!bookId) { $('w-body').innerHTML = ''; return; }
+  const days = [0, 1, 2, 3, 4].map((i) => addDays(weekStart, i));
+  const today = todayStr();
+  const from = fmt(days[0]), to = fmt(days[4]);
+
+  const map = {};
+  cache.rows.forEach((r) => {
+    if (r.book_id === bookId && r.reserved_date >= from && r.reserved_date <= to) map[`${r.reserved_date}_${r.period}`] = r;
+  });
+
+  $('w-body').innerHTML = PERIODS.map((p) => {
+    const cells = days.map((d) => {
+      const ds = fmt(d);
+      const r = map[`${ds}_${p}`];
+      const cls = ['slot'];
+      if (ds === today) cls.push('today');
+      if (ds < today) cls.push('past');
+      if (!r && p > maxFor(ds)) {
+        cls.push('closed');
+        return `<td class="${cls.join(' ')}">—</td>`;
+      }
+      const why = !r && blockedReason(ds, p, bookId);
+      if (why) {
+        cls.push('closed', 'blocked');
+        return `<td class="${cls.join(' ')}" title="${esc(why)}">${esc(why)}</td>`;
+      }
+      if (r) {
+        cls.push('booked');
+        return `<td class="${cls.join(' ')}"><strong>${esc(classLabel(r))}</strong><span>${esc(r.teacher_name)}</span></td>`;
+      }
+      return `<td class="${cls.join(' ')}" data-date="${ds}" data-
